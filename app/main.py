@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends
+from bson import ObjectId
+
 from app.database import client,db
 from app.schemas.tenant import TenantCreate
-from bson import ObjectId
-from app.schemas.user import UserCreate
-from app.core.security import hash_password
+from app.schemas.user import UserCreate, UserLogin
+from app.core.security import hash_password, verify_password, create_access_token
+from app.dependencies.auth import get_current_user
 
 app=FastAPI(
     title="Multi-Tenant SaaS API",
@@ -74,3 +76,42 @@ async def test():
         "hashed":hashed
     }
 '''
+
+@app.post("/login")
+async def login(user:UserLogin):
+    #find user by email
+    existing_user= await db.users.find_one({
+        "email":user.email
+    })
+
+    if not existing_user:
+        raise HTTPException(
+            status_code=401,
+            detail="invalid email or password"
+        )
+
+    #verify the submitted password against the stored hash
+    if not verify_password(user.password,existing_user["password_hash"]):
+        raise HTTPException(
+            status_code=401,
+            detail="invalid email or password"
+        )
+
+    #generate a jwt for this authenticated user
+    access_token= create_access_token(
+        user_id=str(existing_user["_id"]),
+        tenant_id=str(existing_user["tenant_id"])
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type":"bearer"
+    }
+
+@app.get("/me")
+async def get_profile(current_user:dict=Depends(get_current_user)):
+    return{
+        "user_id": str(current_user["_id"]),
+        "email": current_user["email"],
+        "tenant_id": str(current_user["tenant_id"])
+    }

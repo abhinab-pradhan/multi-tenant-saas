@@ -32,3 +32,10 @@ def create_access_token(user_id:str, tenant_id: str) -> str:
     return jwt.encode(
         payload,JWT_SECRET_KEY,algorithm=JWT_ALGORITHM
     )
+
+def decode_access_token(token:str) -> dict:
+    return jwt.decode(
+        token,
+        JWT_SECRET_KEY,
+        algorithms=[JWT_ALGORITHM]
+    )
