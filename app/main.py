@@ -6,11 +6,15 @@ from app.schemas.tenant import TenantCreate
 from app.schemas.user import UserCreate, UserLogin
 from app.core.security import hash_password, verify_password, create_access_token
 from app.dependencies.auth import get_current_user
+from app.routers.projects import router as projects_router
+
 
 app=FastAPI(
     title="Multi-Tenant SaaS API",
     version="1.0"
 )
+
+app.include_router(projects_router)
 
 @app.get("/")
 async def root():
