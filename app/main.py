@@ -9,6 +9,9 @@ from app.dependencies.auth import get_current_user
 from app.routers.projects import router as projects_router
 from app.routers.permissions import router as permissions_router
 from app.routers.roles import router as roles_router
+from app.schemas.user import UserRoleAssign
+from bson.errors import InvalidId
+from app.dependencies.permissions import require_permission
 
 
 
@@ -65,7 +68,8 @@ async def create_user(user:UserCreate):
     user_data={
         "email": user.email,
         "password_hash":hash_password(user.password),
-        "tenant_id":ObjectId(user.tenant_id)
+        "tenant_id":ObjectId(user.tenant_id),
+        "role_ids":[]
     }
 
     result=await db.users.insert_one(user_data)
@@ -123,4 +127,64 @@ async def get_profile(current_user:dict=Depends(get_current_user)):
         "user_id": str(current_user["_id"]),
         "email": current_user["email"],
         "tenant_id": str(current_user["tenant_id"])
+    }
+
+@app.post("/users/{user_id}/roles")
+async def assign_roles_to_user(user_id: str, assignment: UserRoleAssign, current_user: dict=Depends(get_current_user)):
+    tenant_id= current_user["tenant_id"]
+
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(
+            status_code=400,
+            detail="invalid user id"
+        )
+
+    target_user= await db.users.find_one({
+        "_id": ObjectId(user_id),
+        "tenant_id":tenant_id
+    })
+
+    if not target_user:
+        raise HTTPException(
+            status_code=400,
+            detail="one or more role ids are invalid"
+        )
+
+    role_ids= list({ObjectId(rid) for rid in assignment.role_ids})
+
+    roles= await db.roles.find({
+        "_id":{"$in": role_ids},
+        "tenant_id": tenant_id
+    }).to_list(length=len(role_ids))
+
+    if len(roles) != len(role_ids):
+        raise HTTPException(
+            status_code=400,
+            detail="one or more roles do not exist in this tenant"
+        )
+
+    await db.users.update_one(
+        {
+            "_id": target_user["_id"],
+            "tenant_id":tenant_id
+        },
+        {
+            "$addToSet":{
+                "role_ids":{"$each":role_ids}
+            }
+        }
+    )
+
+    return{
+        "message":"roles assigned successfully",
+        "user_role":user_id,
+        "role_ids":[str(rid) for rid in role_ids]
+    }
+
+@app.get("/test-permission")
+async def test_permission(
+    current_user: dict =Depends(require_permission("project:create"))
+):
+    return {
+        "message": "you have project create permission"
     }

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -8,3 +8,6 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email:str
     password:str
+
+class UserRoleAssign(BaseModel):
+    role_ids: list[str]= Field(min_length=1)
