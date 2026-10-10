@@ -7,6 +7,9 @@ from app.schemas.user import UserCreate, UserLogin
 from app.core.security import hash_password, verify_password, create_access_token
 from app.dependencies.auth import get_current_user
 from app.routers.projects import router as projects_router
+from app.routers.permissions import router as permissions_router
+from app.routers.roles import router as roles_router
+
 
 
 app=FastAPI(
@@ -15,6 +18,8 @@ app=FastAPI(
 )
 
 app.include_router(projects_router)
+app.include_router(permissions_router)
+app.include_router(roles_router)
 
 @app.get("/")
 async def root():
