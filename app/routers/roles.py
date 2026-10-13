@@ -18,12 +18,14 @@ async def create_role(
 ):
     tenant_id = current_user["tenant_id"]
 
-    existing = await db.roles.find_one({
-        "name": role.name,
-        "tenant_id": tenant_id
+    role_name= role.name.strip().lower()
+
+    existing_role = await db.roles.find_one({
+        "name": role_name,
+        "tenant_id": current_user["tenant_id"]
     })
 
-    if existing:
+    if existing_role:
         raise HTTPException(
             status_code=409,
             detail="Role already exists for this tenant"

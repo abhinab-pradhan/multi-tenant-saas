@@ -12,12 +12,20 @@ from app.routers.roles import router as roles_router
 from app.schemas.user import UserRoleAssign
 from bson.errors import InvalidId
 from app.dependencies.permissions import require_permission
+from app.database import create_indexes
+
+from contextlib import asynccontextmanager
 
 
+@asynccontextmanager
+async def lifespan(app:FastAPI):
+    await create_indexes()
+    yield
 
 app=FastAPI(
     title="Multi-Tenant SaaS API",
-    version="1.0"
+    version="1.0",
+    lifespan=lifespan
 )
 
 app.include_router(projects_router)
