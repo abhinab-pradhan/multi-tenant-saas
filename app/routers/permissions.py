@@ -44,8 +44,8 @@ async def create_permission(
 
 
 @router.get("/")
-async def list_permissions(
-    current_user: dict = Depends(get_current_user)
+async def get_permissions(
+    current_user: dict = Depends(require_permission("role:manage"))
 ):
     permissions = await db.permissions.find({
         "tenant_id": current_user["tenant_id"]
