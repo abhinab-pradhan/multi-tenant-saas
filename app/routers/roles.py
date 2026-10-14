@@ -7,6 +7,7 @@ from app.database import db
 from app.dependencies.auth import get_current_user
 from app.schemas.role import RoleCreate
 from app.schemas.role import RoleCreate, RolePermissionAssign
+from app.dependencies.permissions import require_permission
 
 router = APIRouter(prefix="/roles", tags=["Roles"])
 
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/roles", tags=["Roles"])
 @router.post("/")
 async def create_role(
     role: RoleCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("role:manage"))
 ):
     tenant_id = current_user["tenant_id"]
 
@@ -74,7 +75,7 @@ async def list_roles(
 async def assign_permissions(
     role_id: str,
     assignment: RolePermissionAssign,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("role:manage"))
 ):
     tenant_id = current_user["tenant_id"]
 

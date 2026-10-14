@@ -138,7 +138,7 @@ async def get_profile(current_user:dict=Depends(get_current_user)):
     }
 
 @app.post("/users/{user_id}/roles")
-async def assign_roles_to_user(user_id: str, assignment: UserRoleAssign, current_user: dict=Depends(get_current_user)):
+async def assign_roles_to_user(user_id: str, assignment: UserRoleAssign, current_user: dict=Depends(require_permission("role:manage"))):
     tenant_id= current_user["tenant_id"]
 
     if not ObjectId.is_valid(user_id):
