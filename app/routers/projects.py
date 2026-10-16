@@ -5,6 +5,7 @@ from app.database import db
 from app.dependencies.auth import get_current_user
 from app.schemas.project import ProjectCreate
 from app.dependencies.permissions import require_permission
+from app.dependencies.permissions import require_project_read
 from app.schemas.project import ProjectCreate, ProjectUpdate
 
 router=APIRouter(prefix="/projects", tags=["Projects"])
@@ -28,7 +29,8 @@ async def create_project(project: ProjectCreate, current_user:dict = Depends(req
     }
 
 @router.get("/")
-async def get_projects(current_user: dict = Depends(require_permission("project:read"))):
+#async def get_projects(current_user: dict = Depends(require_permission("project:read"))):
+async def get_projects(current_user: dict = Depends(require_project_read)):
     projects= await db.projects.find({
         "tenant_id":current_user["tenant_id"]
     }).to_list(length=100)
@@ -44,7 +46,8 @@ async def get_projects(current_user: dict = Depends(require_permission("project:
 @router.get("/{project_id}")
 async def get_project(
     project_id: str,
-    current_user: dict=Depends(require_permission("project:read"))
+    #current_user: dict=Depends(require_permission("project:read"))
+    current_user: dict = Depends(require_project_read)
 ):
     if not ObjectId.is_valid(project_id):
         raise HTTPException(
@@ -73,9 +76,8 @@ async def get_project(
 async def update_project(
     project_id: str,
     project: ProjectUpdate,
-    current_user: dict = Depends(
-        require_permission("project:update")
-    )
+    current_user: dict = Depends(require_permission("project:update"))
+    #current_user: dict = Depends(require_project_read)
 ):
     if not ObjectId.is_valid(project_id):
         raise HTTPException(

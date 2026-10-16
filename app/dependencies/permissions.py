@@ -48,3 +48,4 @@ def require_permission(permission_name: str):
         return current_user
 
     return permission_checker
+require_project_read=require_permission("project:read")
