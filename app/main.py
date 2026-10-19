@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 
 from app.database import client,db
 from app.schemas.tenant import TenantCreate
@@ -73,19 +74,55 @@ async def create_tenant(tenant:TenantCreate):
 @app.post("/users")
 async def create_user(user:UserCreate):
 
+    #validate the tenant id
+    if not ObjectId.is_valid(user.tenant_id):
+        raise HTTPException(status_code=400, detail="invalid tenant id")
+
+    tenant_id = ObjectId(user.tenant_id)
+
+    #confirm that the tenant exists
+    tenant= await db.tenants.find_one({
+        "_id":tenant_id
+    })
+
+    if not tenant:
+        raise HTTPException(
+            status_code=404,
+            detail="tenant not found"
+        )
+
+    #prevent duplicate emails within the same tenant
+    existing_user= await db.users.find_one({
+        "email":user.email,
+        "tenant_id":tenant_id
+    })
+
+    if existing_user:
+        raise HTTPException(
+            status_code=409,
+            detail="email already registered in this tenant"
+        )
+    
+
     user_data={
         "email": user.email,
         "password_hash":hash_password(user.password),
-        "tenant_id":ObjectId(user.tenant_id),
+        "tenant_id":tenant_id,
         "role_ids":[]
     }
 
-    result=await db.users.insert_one(user_data)
+    try:
+        result=await db.users.insert_one(user_data)
+    except DuplicateKeyError:
+        raise HTTPException(
+            status_code=400,
+            detail="email already registered in this tenant"
+        )
 
     return{
         "message":"user created successfully",
         "user_id":str(result.inserted_id),
-        "tenant_id":user.tenant_id
+        "tenant_id":str(tenant_id)
     }
 
 
@@ -100,9 +137,20 @@ async def test():
 
 @app.post("/login")
 async def login(user:UserLogin):
-    #find user by email
+
+    #vaidate the tenant id before converting it
+    if not ObjectId.is_valid(user.tenant_id):
+        raise HTTPException(
+            status_code=400,
+            detail="invalid tenant id"
+        )
+
+    tenant_id=ObjectId(user.tenant_id)
+
+    #find user withing specific tenant
     existing_user= await db.users.find_one({
-        "email":user.email
+        "email":user.email,
+        "tenant_id":tenant_id
     })
 
     if not existing_user:

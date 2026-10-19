@@ -34,3 +34,12 @@ async def create_indexes():
         unique=True,
         name="unique_email_per_tenant"
     )
+
+    await db.users.create_index(
+        [
+            ("tenant_id", 1),
+            ("email", 1)
+        ],
+        unique=True,
+        name="unique_email_per_tenant"
+    )
