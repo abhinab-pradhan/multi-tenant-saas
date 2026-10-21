@@ -72,14 +72,13 @@ async def create_tenant(tenant:TenantCreate):
     }
 
 @app.post("/users")
-async def create_user(user:UserCreate):
+async def create_user(user:UserCreate, current_user:dict=Depends(require_permission("user:manage"))):
 
     #validate the tenant id
     if not ObjectId.is_valid(user.tenant_id):
         raise HTTPException(status_code=400, detail="invalid tenant id")
 
-    tenant_id = ObjectId(user.tenant_id)
-
+    tenant_id = current_user["tenant_id"]
     #confirm that the tenant exists
     tenant= await db.tenants.find_one({
         "_id":tenant_id
