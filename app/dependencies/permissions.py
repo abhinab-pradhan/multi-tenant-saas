@@ -49,3 +49,4 @@ def require_permission(permission_name: str):
 
     return permission_checker
 require_project_read=require_permission("project:read")
+require_user_manage= require_permission("user:manage")

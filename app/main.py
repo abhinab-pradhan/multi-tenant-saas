@@ -15,6 +15,8 @@ from bson.errors import InvalidId
 from app.dependencies.permissions import require_permission
 from app.database import create_indexes
 
+from app.dependencies.permissions import(require_permission, require_user_manage)
+
 from contextlib import asynccontextmanager
 
 
@@ -72,7 +74,7 @@ async def create_tenant(tenant:TenantCreate):
     }
 
 @app.post("/users")
-async def create_user(user:UserCreate, current_user:dict=Depends(require_permission("user:manage"))):
+async def create_user(user:UserCreate, current_user:dict=Depends(require_user_manage)):
 
     #validate the tenant id
     if not ObjectId.is_valid(user.tenant_id):

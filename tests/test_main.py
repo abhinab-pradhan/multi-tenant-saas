@@ -2,11 +2,15 @@ from fastapi.testclient import TestClient
 from bson import ObjectId
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
+from fastapi import HTTPException
 
 from app.main import app
 from app.dependencies.auth import get_current_user
 from app.dependencies.permissions import require_project_read
+from app.dependencies.permissions import require_permission
+from app.dependencies.permissions import require_user_manage
 import app.routers.projects as projects_module
+import app.main as main_module
 
 
 client = TestClient(app)
@@ -165,4 +169,87 @@ def test_user_can_access_project_in_own_tenant():
 
     finally:
         projects_module.db = original_db
+        app.dependency_overrides.clear()
+
+def test_employee_cannot_create_user():
+    async def fake_permission_checker():
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=403,
+            detail="permission required user:manage"
+        )
+    app.dependency_overrides[require_user_manage] = fake_permission_checker
+
+
+    try:
+        response= client.post(
+            "/users",
+            json={
+                "email":"employee-test@example.com",
+                "password":"strongPassword123",
+                "tenant_id":str(ObjectId())
+            }
+        )
+        assert response.status_code==403
+
+    finally:
+        app.dependency_overrides.clear()
+
+def test_user_creation_uses_authenticated_tenant():
+    tenant_a= ObjectId()
+    tenant_b= ObjectId()
+
+    fake_user={
+        "_id": ObjectId(),
+        "email": "admin@example.com",
+        "tenant_id": tenant_a,
+        "role_ids":[ObjectId()]
+    }
+
+    async def fake_current_user():
+        return fake_user
+
+    mock_tenant_find= AsyncMock(return_value= {"_id":tenant_a})
+    mock_user_find= AsyncMock(return_value=None)
+    mock_user_insert= AsyncMock(
+        return_value=SimpleNamespace(inserted_id=ObjectId())
+    )
+
+    fake_db= SimpleNamespace(
+        tenants=SimpleNamespace(find_one=mock_tenant_find),
+        users=SimpleNamespace(
+            find_one=mock_user_find,
+            insert_one=mock_user_insert
+        )
+    )
+
+    #override the exact dependency used by the route
+    #user_manage_depedency= main_module.require_permission("user:manage")
+    app.dependency_overrides[require_user_manage]= fake_current_user
+
+    original_db= main_module.db
+    main_module.db = fake_db
+
+    try:
+        response= client.post(
+            "/users",
+            json={
+                "email":"newuser@example.com",
+                "password":"strongPassword123",
+                "tenant_id":str(tenant_b)
+            }
+        )
+
+        assert response.status_code in (200,201), response.text
+
+        mock_tenant_find.assert_awaited_once()
+        mock_user_find.assert_awaited_once()
+        mock_user_insert.assert_awaited_once()
+
+        #check the actual inserted document
+        inserted_user= mock_user_insert.call_args.args[0]
+        assert inserted_user["tenant_id"] == tenant_a
+
+    finally:
+        main_module.db= original_db
         app.dependency_overrides.clear()
