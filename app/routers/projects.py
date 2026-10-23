@@ -5,7 +5,7 @@ from app.database import db
 from app.dependencies.auth import get_current_user
 from app.schemas.project import ProjectCreate
 from app.dependencies.permissions import require_permission
-from app.dependencies.permissions import require_project_read
+from app.dependencies.permissions import require_project_read, require_project_update, require_project_delete
 from app.schemas.project import ProjectCreate, ProjectUpdate
 
 router=APIRouter(prefix="/projects", tags=["Projects"])
@@ -76,7 +76,7 @@ async def get_project(
 async def update_project(
     project_id: str,
     project: ProjectUpdate,
-    current_user: dict = Depends(require_permission("project:update"))
+    current_user: dict = Depends(require_project_update)
     #current_user: dict = Depends(require_project_read)
 ):
     if not ObjectId.is_valid(project_id):
@@ -113,9 +113,7 @@ async def update_project(
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: str,
-    current_user: dict = Depends(
-        require_permission("project:delete")
-    )
+    current_user: dict = Depends(require_project_delete)
 ):
     if not ObjectId.is_valid(project_id):
         raise HTTPException(

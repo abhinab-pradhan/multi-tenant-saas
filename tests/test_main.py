@@ -6,9 +6,7 @@ from fastapi import HTTPException
 
 from app.main import app
 from app.dependencies.auth import get_current_user
-from app.dependencies.permissions import require_project_read
-from app.dependencies.permissions import require_permission
-from app.dependencies.permissions import require_user_manage
+from app.dependencies.permissions import require_project_read, require_permission, require_user_manage, require_project_update, require_project_delete
 import app.routers.projects as projects_module
 import app.main as main_module
 
@@ -294,4 +292,85 @@ def test_user_cannot_access_another_tenants_projects():
 
     finally:
         projects_module.db=original_db
+        app.dependency_overrides.clear()
+
+#Test cross-tenant project updates
+def test_user_cannot_update_another_tenants_project():
+    tenant_a= ObjectId()
+    project_id= ObjectId()
+
+    fake_user={
+        "_id":ObjectId(),
+        "tenant_id":tenant_a,
+        "role_ids":[ObjectId()]
+    }
+
+    async def fake_current_user():
+        return fake_user
+
+    mock_update= AsyncMock(return_value=SimpleNamespace(matched_count=0))
+
+    fake_db=SimpleNamespace(
+        projects=SimpleNamespace(
+            update_one=mock_update
+        )
+    )
+
+    app.dependency_overrides[require_project_update]= fake_current_user
+
+    original_db= projects_module.db
+    projects_module.db=fake_db
+
+    try:
+        response= client.put(
+            f"/projects/{project_id}",
+            json={"name":"unauthorized change"}
+        )
+
+        assert response.status_code==404, response.text
+
+        query=mock_update.call_args.args[0]
+        assert query["_id"]==project_id
+        assert query["tenant_id"] == tenant_a
+
+    finally:
+        projects_module.db=original_db
+        app.dependency_overrides.clear()
+
+def test_user_cannot_delete_another_tenants_project():
+    tenant_a= ObjectId()
+    project_id= ObjectId()
+
+    fake_user= {
+        "_id": ObjectId(),
+        "tenant_id": tenant_a,
+        "role_ids":[ObjectId()]
+    }
+
+    async def fake_current_user():
+        return fake_user
+
+    mock_delete=AsyncMock(return_value=SimpleNamespace(deleted_count=0))
+
+    fake_db= SimpleNamespace(
+        projects=SimpleNamespace(
+            delete_one=mock_delete
+        )
+    )
+
+    app.dependency_overrides[require_project_delete]= fake_current_user
+
+    original_db= projects_module.db
+    projects_module.db= fake_db
+
+    try:
+        response=client.delete(f"/projects/{project_id}")
+        assert response.status_code== 404, response.text
+
+        query= mock_delete.call_args.args[0]
+        assert query["_id"] == project_id
+        assert query["tenant_id"] == tenant_a
+
+    finally:
+        projects_module.db= original_db
         app.dependency_overrides.clear()
