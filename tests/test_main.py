@@ -253,3 +253,45 @@ def test_user_creation_uses_authenticated_tenant():
     finally:
         main_module.db= original_db
         app.dependency_overrides.clear()
+
+def test_user_cannot_access_another_tenants_projects():
+    tenant_a= ObjectId()
+    tenant_b= ObjectId()
+    project_id= ObjectId()
+
+    fake_user={
+        "_id":ObjectId(),
+        "tenant_id":tenant_a,
+        "role_ids":[ObjectId()]
+    }
+
+    async def fake_current_user():
+        return fake_user
+
+    mock_project_find= AsyncMock(return_value=None)
+
+    fake_db= SimpleNamespace(
+
+        projects=SimpleNamespace(
+            find_one=mock_project_find
+        )
+    )
+
+    app.dependency_overrides[require_project_read]= fake_current_user
+
+    original_db= projects_module.db
+    projects_module.db= fake_db
+
+    try:
+        response= client.get(f"/projects/{project_id}")
+
+        assert response.status_code==404, response.text
+
+        #the lookup must be scoped to the authenticated tenant
+        query= mock_project_find.call_args.args[0]
+        assert query["_id"] == project_id
+        assert query["tenant_id"] == tenant_a
+
+    finally:
+        projects_module.db=original_db
+        app.dependency_overrides.clear()

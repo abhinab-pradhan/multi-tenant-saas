@@ -5,7 +5,7 @@ from pymongo.errors import DuplicateKeyError
 from app.database import db
 from app.dependencies.auth import get_current_user
 from app.schemas.permission import PermissionCreate
-from app.dependencies.permissions import require_permission
+from app.dependencies.permissions import require_role_manage,require_permission_manage
 
 router = APIRouter(prefix="/permissions", tags=["Permissions"])
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/permissions", tags=["Permissions"])
 @router.post("/")
 async def create_permission(
     permission: PermissionCreate,
-    current_user: dict = Depends(require_permission("role:manage"))
+    current_user: dict = Depends(require_permission_manage)
 ):
     tenant_id = current_user["tenant_id"]
 
@@ -45,7 +45,7 @@ async def create_permission(
 
 @router.get("/")
 async def get_permissions(
-    current_user: dict = Depends(require_permission("role:manage"))
+    current_user: dict = Depends(require_role_manage)
 ):
     permissions = await db.permissions.find({
         "tenant_id": current_user["tenant_id"]
