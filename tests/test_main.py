@@ -7,6 +7,8 @@ from fastapi import HTTPException
 from app.main import app
 from app.dependencies.auth import get_current_user
 from app.dependencies.permissions import require_project_read, require_permission, require_user_manage, require_project_update, require_project_delete
+from app.dependencies.permissions import require_role_manage
+
 import app.routers.projects as projects_module
 import app.main as main_module
 
@@ -297,23 +299,38 @@ def test_user_cannot_access_another_tenants_projects():
 #Test cross-tenant project updates
 def test_user_cannot_update_another_tenants_project():
     tenant_a= ObjectId()
+    tenant_b=ObjectId()
     project_id= ObjectId()
 
-    fake_user={
-        "_id":ObjectId(),
-        "tenant_id":tenant_a,
-        "role_ids":[ObjectId()]
+    tenant_b_project={
+        "_id":project_id,
+        "tenant_id":ObjectId(),
+        "name":"tenant b private project"
     }
 
     async def fake_current_user():
-        return fake_user
+        return{
+            "_id":ObjectId(),
+            "tenant_id":tenant_a,
+            "role_ids": [ObjectId()]
+        }
 
-    mock_update= AsyncMock(return_value=SimpleNamespace(matched_count=0))
+    async def fake_update_one(query, update):
+        #the update query must be scoped to tenant A
+        assert query["tenant_id"] == tenant_a
+
+        #tenant B's project cannot match tenant A's query
+        assert not(
+            query["_id"] == tenant_b_project["_id"]
+            and query["tenant_id"] == tenant_b_project["tenant_id"]
+        )
+
+        return SimpleNamespace(matched_count=0)
+
+    mock_update= AsyncMock(side_effect= fake_update_one)
 
     fake_db=SimpleNamespace(
-        projects=SimpleNamespace(
-            update_one=mock_update
-        )
+        projects=SimpleNamespace(update_one=mock_update)
     )
 
     app.dependency_overrides[require_project_update]= fake_current_user
@@ -328,6 +345,7 @@ def test_user_cannot_update_another_tenants_project():
         )
 
         assert response.status_code==404, response.text
+        mock_update.assert_awaited_once()
 
         query=mock_update.call_args.args[0]
         assert query["_id"]==project_id
@@ -339,23 +357,37 @@ def test_user_cannot_update_another_tenants_project():
 
 def test_user_cannot_delete_another_tenants_project():
     tenant_a= ObjectId()
+    tenant_b=ObjectId()
     project_id= ObjectId()
 
-    fake_user= {
-        "_id": ObjectId(),
-        "tenant_id": tenant_a,
-        "role_ids":[ObjectId()]
+    tenant_b_project={
+        "_id":project_id,
+        "tenant_id":tenant_b,
+        "name":"tenant b private project"
     }
 
     async def fake_current_user():
-        return fake_user
+        return{
+            "_id":ObjectId(),
+            "tenant_id":tenant_a,
+            "role_ids":[ObjectId()]
+        }
 
-    mock_delete=AsyncMock(return_value=SimpleNamespace(deleted_count=0))
+    async def fake_delete_one(query):
+        #the  delete query must be scoped to tenant A
+        assert query["tenant_id"] == tenant_a
+
+        assert not(
+            query["_id"] == tenant_b_project["_id"]
+            and query["tenant_id"] == tenant_b_project["tenant_id"]
+        )
+
+        return SimpleNamespace(deleted_count=0)
+
+    mock_delete=AsyncMock(side_effect=fake_delete_one)
 
     fake_db= SimpleNamespace(
-        projects=SimpleNamespace(
-            delete_one=mock_delete
-        )
+        projects=SimpleNamespace(delete_one=mock_delete)
     )
 
     app.dependency_overrides[require_project_delete]= fake_current_user
@@ -366,6 +398,7 @@ def test_user_cannot_delete_another_tenants_project():
     try:
         response=client.delete(f"/projects/{project_id}")
         assert response.status_code== 404, response.text
+        mock_delete.assert_awaited_once()
 
         query= mock_delete.call_args.args[0]
         assert query["_id"] == project_id
@@ -373,4 +406,30 @@ def test_user_cannot_delete_another_tenants_project():
 
     finally:
         projects_module.db= original_db
+        app.dependency_overrides.clear()
+
+#test for unauthorized role management
+def test_employee_cannot_manage_roles():
+    async def fake_permission_denied():
+        raise HTTPException(
+            status_code=403,
+            detail="permission required role:manage"
+        )
+
+    app.dependency_overrides[require_role_manage]=(
+        fake_permission_denied
+    )
+
+    try:
+        response= client.post(
+            "/roles/",
+            json={
+                "name":"employee-test",
+                "description":"test role"
+            }
+        )
+
+        assert response.status_code== 403, response.text
+
+    finally:
         app.dependency_overrides.clear()
