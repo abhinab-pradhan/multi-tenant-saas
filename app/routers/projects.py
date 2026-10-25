@@ -5,13 +5,13 @@ from app.database import db
 from app.dependencies.auth import get_current_user
 from app.schemas.project import ProjectCreate
 from app.dependencies.permissions import require_permission
-from app.dependencies.permissions import require_project_read, require_project_update, require_project_delete
+from app.dependencies.permissions import require_project_read, require_project_update, require_project_delete, require_project_create
 from app.schemas.project import ProjectCreate, ProjectUpdate
 
 router=APIRouter(prefix="/projects", tags=["Projects"])
 
 @router.post("/")
-async def create_project(project: ProjectCreate, current_user:dict = Depends(require_permission("project:create"))):
+async def create_project(project: ProjectCreate, current_user:dict = Depends(require_project_create)):
     project_data={
         "name":project.name,
         "description":project.description,

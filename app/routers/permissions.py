@@ -5,7 +5,7 @@ from pymongo.errors import DuplicateKeyError
 from app.database import db
 from app.dependencies.auth import get_current_user
 from app.schemas.permission import PermissionCreate
-from app.dependencies.permissions import require_role_manage,require_permission_manage
+from app.dependencies.permissions import require_role_manage,require_permission_manage, require_project_create
 
 router = APIRouter(prefix="/permissions", tags=["Permissions"])
 

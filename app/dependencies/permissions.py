@@ -56,3 +56,5 @@ require_permission_manage=require_permission("permission:manage")
 
 require_project_update = require_permission("project:update")
 require_project_delete = require_permission("project:delete")
+
+require_project_create = require_permission("project:create")

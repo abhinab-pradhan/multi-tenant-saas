@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from app.main import app
 from app.dependencies.auth import get_current_user
-from app.dependencies.permissions import require_project_read, require_permission, require_user_manage, require_project_update, require_project_delete
+from app.dependencies.permissions import require_project_read, require_permission_manage, require_user_manage, require_project_update, require_project_delete, require_project_create
 from app.dependencies.permissions import require_role_manage
 
 import app.routers.projects as projects_module
@@ -430,6 +430,63 @@ def test_employee_cannot_manage_roles():
         )
 
         assert response.status_code== 403, response.text
+
+    finally:
+        app.dependency_overrides.clear()
+
+#test permission manage authorization
+def test_employee_create_permission():
+    async def fake_permission_denied():
+        raise HTTPException(
+            status_code=403,
+            detail="permission required: permission:manage"
+        )
+
+    app.dependency_overrides[
+        require_permission_manage
+    ]= fake_permission_denied
+
+    try:
+        response= client.post(
+            "/permissions",
+            json={
+                "name":"test:permission",
+                "description":"test permission"
+            }
+        )
+
+        assert response.status_code == 403, response.text
+
+    finally:
+        app.dependency_overrides.clear()
+
+def test_project_create_rejects_short_name():
+    async def fake_current_user():
+        return{
+            "_id":ObjectId(),
+            "tenant_id":ObjectId(),
+            "role_ids":[]
+        }
+
+    app.dependency_overrides[require_project_create] = fake_current_user
+
+    try:
+        response= client.post(
+            "/projects/",
+            json={
+                "name":"ab",
+                "description":"validation test"
+            }
+        )
+
+        assert response.status_code== 422, response.text
+
+        #verify that the validation error concerns the name
+        errors= response.json()["detail"]
+        assert any(
+            error["loc"][-1]=="name"
+            for error in errors
+        )
 
     finally:
         app.dependency_overrides.clear()
