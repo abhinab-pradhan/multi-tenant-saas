@@ -112,7 +112,7 @@ def test_cannot_access_another_tenants_project():
         response = client.get(f"/projects/{project_id}")
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "project not found"
+        assert response.json()["error"] == "project not found"
 
         mock_find_one.assert_awaited_once()
 

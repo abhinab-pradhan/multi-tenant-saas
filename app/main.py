@@ -1,6 +1,10 @@
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import client,db
 from app.schemas.tenant import TenantCreate
@@ -30,6 +34,20 @@ app=FastAPI(
     version="1.0",
     lifespan=lifespan
 )
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(
+    request: Request,
+    exc: StarletteHTTPException
+):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error":exc.detail
+        },
+        headers=exc.headers
+    )
 
 app.include_router(projects_router)
 app.include_router(permissions_router)
