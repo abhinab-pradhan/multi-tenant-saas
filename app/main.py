@@ -23,9 +23,17 @@ from app.dependencies.permissions import(require_permission, require_user_manage
 
 from contextlib import asynccontextmanager
 
+import logging
+from app.core.logging_config import setup_logging
+
+
+setup_logging()
+logger=logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
+    logger.info("fsatAPI application starting")
     await create_indexes()
     yield
 
@@ -52,6 +60,26 @@ async def http_exception_handler(
 app.include_router(projects_router)
 app.include_router(permissions_router)
 app.include_router(roles_router)
+
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(
+    request: Request,
+    exc:Exception
+):
+    logger.error(
+        "Unexpected error on %s %s",
+        request.method,
+        request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success":False,
+            "error":"internal server error"
+        }
+    )
 
 @app.get("/")
 async def root():
