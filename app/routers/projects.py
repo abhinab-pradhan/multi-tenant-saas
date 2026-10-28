@@ -7,7 +7,7 @@ from app.dependencies.auth import get_current_user
 from app.schemas.project import ProjectCreate
 from app.dependencies.permissions import require_permission
 from app.dependencies.permissions import require_project_read, require_project_update, require_project_delete, require_project_create
-from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse
 
 import logging
 
@@ -15,7 +15,7 @@ logger=logging.getLogger(__name__)
 
 router=APIRouter(prefix="/projects", tags=["Projects"])
 
-@router.post("/")
+@router.post("/", response_model= ProjectResponse)
 async def create_project(project: ProjectCreate, current_user:dict = Depends(require_project_create)):
     project_data={
         "name":project.name,
@@ -26,16 +26,16 @@ async def create_project(project: ProjectCreate, current_user:dict = Depends(req
     }
 
     result= await db.projects.insert_one(project_data)
+
+    project_data["id"]= str(result.inserted_id)
+    project_data["tenant_id"]= str(project_data["tenant_id"])
+    project_data["created_by"]= str(project_data["created_by"])
+
     logger.info("project created successfully")
 
-    return{
-        "message":"project created",
+    return project_data
 
-        "project_id":str(result.inserted_id),
-        "name":project.name
-    }
-
-@router.get("/")
+@router.get("/", response_model=ProjectListResponse)
 #async def get_projects(current_user: dict = Depends(require_permission("project:read"))):
 async def get_projects(
     page: int=Query(default=1, ge=1),
@@ -69,7 +69,7 @@ async def get_projects(
     projects=await cursor.to_list(length=page_size)
 
     for project in projects:
-        project["_id"]= str(project["_id"])
+        project["id"]= str(project.pop("_id"))
         project["tenant_id"]= str(project["tenant_id"])
         project["created_by"]= str(project["created_by"])
 
@@ -83,7 +83,7 @@ async def get_projects(
     }
 
 
-@router.get("/{project_id}")
+@router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: str,
     #current_user: dict=Depends(require_permission("project:read"))
@@ -106,7 +106,7 @@ async def get_project(
             detail="project not found"
         )
 
-    project["_id"]= str(project["_id"])
+    project["id"]= str(project.pop("_id"))
     project["tenant_id"]= str(project["tenant_id"])
     project["created_by"]= str(project["created_by"])
 
