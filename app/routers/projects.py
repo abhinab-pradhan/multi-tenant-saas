@@ -38,26 +38,40 @@ async def create_project(project: ProjectCreate, current_user:dict = Depends(req
 async def get_projects(
     page: int=Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
+    search: str | None=None,
+    sort_by: str= Query(default="name", pattern="^(name|created_at)$"),
+    order: str=Query(default="asc", pattern="^(asc|desc)$"),
     current_user: dict = Depends(require_project_read)
     ):
 
     tenant_id=current_user["tenant_id"]
 
-    skip= (page-1)* page_size
+    query= {"tenant_id": tenant_id}
 
-    cursor= db.projects.find({"tenant_id": tenant_id})
-    projects=await cursor.skip(skip).limit(page_size).to_list(
-        length=page_size
-    )
+    if search:
+        query["name"]={
+            "$regex":search,
+            "$options":"i",
+        }
+
+    skip= (page-1)* page_size
+    direction= 1 if order=="asc" else -1
+
+    cursor= (
+        db.projects.find(query)
+        .sort(sort_by, direction)
+        .skip(skip)
+        .limit(page_size)
+        )
+    
+    projects=await cursor.to_list(length=page_size)
 
     for project in projects:
         project["_id"]= str(project["_id"])
         project["tenant_id"]= str(project["tenant_id"])
         project["created_by"]= str(project["created_by"])
 
-    total= await db.projects.count_documents(
-        {"tenant_id":tenant_id}
-    )
+    total= await db.projects.count_documents(query)
 
     return {
         "page": page,
