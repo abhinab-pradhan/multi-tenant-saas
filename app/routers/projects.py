@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from bson import ObjectId
+from datetime import datetime, timezone
 
 from app.database import db
 from app.dependencies.auth import get_current_user
@@ -20,7 +21,8 @@ async def create_project(project: ProjectCreate, current_user:dict = Depends(req
         "name":project.name,
         "description":project.description,
         "tenant_id":current_user["tenant_id"],
-        "created_by":current_user["_id"]
+        "created_by":current_user["_id"],
+        "created_at": datetime.now(timezone.utc)
     }
 
     result= await db.projects.insert_one(project_data)
