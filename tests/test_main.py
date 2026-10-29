@@ -490,3 +490,23 @@ def test_project_create_rejects_short_name():
 
     finally:
         app.dependency_overrides.clear()
+
+#test project pagination and search
+
+def test_project_list_rejects_invalid_page_size():
+    async def fake_current_user():
+        return{
+            "_id":ObjectId(),
+            "tenant_id": ObjectId(),
+            "role_ids":[]
+        }
+
+    app.dependency_overrides[require_project_read] = fake_current_user
+
+    try:
+        response= client.get("/projects/?page=1&page_size=101")
+
+        assert response.status_code == 422
+
+    finally:
+        app.dependency_overrides.clear()
