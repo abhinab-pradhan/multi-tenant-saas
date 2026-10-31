@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 from bson import ObjectId
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from types import SimpleNamespace
 from fastapi import HTTPException
 
@@ -509,4 +509,54 @@ def test_project_list_rejects_invalid_page_size():
         assert response.status_code == 422
 
     finally:
+        app.dependency_overrides.clear()
+
+def test_project_search_preserves_tenant_isolation():
+    tenant_a= ObjectId()
+
+    async def fake_current_user():
+        return{
+            "_id":ObjectId(),
+            "tenant_id": tenant_a,
+            "role_ids": []
+        }
+
+    mock_cursor= MagicMock()
+    mock_cursor.sort.return_value= mock_cursor
+    mock_cursor.skip.return_value= mock_cursor
+    mock_cursor.limit.return_value= mock_cursor
+    mock_cursor.to_list= AsyncMock(return_value=[])
+
+    mock_find= MagicMock(return_value=mock_cursor)
+    mock_count= AsyncMock(return_value=0)
+
+    fake_db= SimpleNamespace(
+        projects=SimpleNamespace(
+            find=mock_find,
+            count_documents=mock_count
+        )
+    )
+
+    original_db= projects_module.db
+    projects_module.db= fake_db
+    app.dependency_overrides[require_project_read] = fake_current_user
+
+    try:
+        response= client.get("/projects/?search=api")
+        assert response.status_code == 200
+
+        #verify tenant filtering in included in the mongoDB query
+        query = mock_find.call_args.args[0]
+
+        assert query["tenant_id"] == tenant_a
+        assert query["name"] == {
+            "$regex": "api",
+            "$options":"i"
+        }
+
+        #count query must also preserve tenant isolation
+        assert mock_count.await_args.args[0] == query
+
+    finally:
+        projects_module.db = original_db
         app.dependency_overrides.clear()
