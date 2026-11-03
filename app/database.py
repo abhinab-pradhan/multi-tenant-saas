@@ -7,8 +7,13 @@ load_dotenv()
 MONGODB_URL=os.getenv("MONGODB_URL")
 DATABASE_NAME=os.getenv("DATABASE_NAME")
 
-client=AsyncMongoClient(MONGODB_URL)
+if not MONGODB_URL:
+    raise ValueError("MONGODB_URL is not configured")
 
+if not DATABASE_NAME:
+    raise ValueError("DATABASE_NAME is not configured")
+
+client= AsyncMongoClient(MONGODB_URL)
 db=client[DATABASE_NAME]
 
 async def create_indexes():

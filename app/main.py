@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from contextlib import asynccontextmanager
 
 from app.database import client,db
 from app.schemas.tenant import TenantCreate
@@ -33,9 +34,19 @@ logger=logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
-    logger.info("fsatAPI application starting")
+
+    await client.admin.command("ping")
+    print("mongoDB connected successfully")
+
+    logger.info("fastAPI application starting")
+
     await create_indexes()
+    logger.info("mongoDB indexes created successfully")
+
     yield
+
+    await client.close()
+    print("mongoDB connection closed")
 
 app=FastAPI(
     title="Multi-Tenant SaaS API",

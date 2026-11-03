@@ -560,3 +560,58 @@ def test_project_search_preserves_tenant_isolation():
     finally:
         projects_module.db = original_db
         app.dependency_overrides.clear()
+
+
+def test_project_list_applies_sorting_and_pagination():
+    tenant_id = ObjectId()
+
+    async def fake_current_user():
+        return {
+            "_id": ObjectId(),
+            "tenant_id": tenant_id,
+            "role_ids": []
+        }
+
+    mock_cursor = MagicMock()
+    mock_cursor.sort.return_value = mock_cursor
+    mock_cursor.skip.return_value = mock_cursor
+    mock_cursor.limit.return_value = mock_cursor
+    mock_cursor.to_list = AsyncMock(return_value=[])
+
+    mock_find = MagicMock(return_value=mock_cursor)
+    mock_count = AsyncMock(return_value=0)
+
+    fake_db = SimpleNamespace(
+        projects=SimpleNamespace(
+            find=mock_find,
+            count_documents=mock_count
+        )
+    )
+
+    original_db = projects_module.db
+    projects_module.db = fake_db
+    app.dependency_overrides[require_project_read] = fake_current_user
+
+    try:
+        response = client.get(
+            "/projects/?page=2&page_size=5&sort_by=name&order=desc"
+        )
+
+        assert response.status_code == 200
+
+        mock_find.assert_called_once_with({
+            "tenant_id": tenant_id
+        })
+
+        mock_cursor.sort.assert_called_once_with("name", -1)
+        mock_cursor.skip.assert_called_once_with(5)
+        mock_cursor.limit.assert_called_once_with(5)
+
+        assert response.json()["page"] == 2
+        assert response.json()["page_size"] == 5
+        assert response.json()["total"] == 0
+        assert response.json()["projects"] == []
+
+    finally:
+        projects_module.db = original_db
+        app.dependency_overrides.clear()
