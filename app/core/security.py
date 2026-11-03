@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from pwdlib import PasswordHash
 from dotenv import load_dotenv
 
+from app.core.config import settings
+
 load_dotenv()
 
 password_hash=PasswordHash.recommended()
@@ -24,21 +26,23 @@ def verify_password(password:str,hashed_password:str) -> bool:
 
 def create_access_token(user_id:str, tenant_id: str) -> str:
     expire_at =datetime.now(timezone.utc) + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     payload={
         "sub":user_id,
         "tenant_id":tenant_id,
-        "algorithm":JWT_ALGORITHM
+        "exp":expire_at
     }
 
     return jwt.encode(
-        payload,JWT_SECRET_KEY,algorithm=JWT_ALGORITHM
+        payload,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM
     )
 
 def decode_access_token(token:str) -> dict:
     return jwt.decode(
         token,
-        JWT_SECRET_KEY,
-        algorithms=[JWT_ALGORITHM]
+        settings.JWT_SECRET_KEY,
+        algorithms=[settings.JWT_ALGORITHM]
     )
