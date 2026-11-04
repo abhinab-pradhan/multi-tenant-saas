@@ -31,7 +31,8 @@ def create_access_token(user_id:str, tenant_id: str) -> str:
     payload={
         "sub":user_id,
         "tenant_id":tenant_id,
-        "exp":expire_at
+        "exp":expire_at,
+        "type":"access"
     }
 
     return jwt.encode(
@@ -46,3 +47,33 @@ def decode_access_token(token:str) -> dict:
         settings.JWT_SECRET_KEY,
         algorithms=[settings.JWT_ALGORITHM]
     )
+
+def create_refresh_token(user_id: str, tenant_id: str) -> str:
+    expire_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+
+    payload = {
+        "sub": user_id,
+        "tenant_id": tenant_id,
+        "exp": expire_at,
+        "type": "refresh"
+    }
+
+    return jwt.encode(
+        payload,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM
+    )
+
+def decode_refresh_token(token: str) -> dict:
+    payload = jwt.decode(
+        token,
+        settings.JWT_SECRET_KEY,
+        algorithms=[settings.JWT_ALGORITHM]
+    )
+
+    if payload.get("type") != "refresh":
+        raise jwt.InvalidTokenError("Invalid refresh token")
+
+    return payload

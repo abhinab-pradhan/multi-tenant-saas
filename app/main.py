@@ -1,16 +1,18 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
+import jwt
 
 from app.database import client,db
 from app.schemas.tenant import TenantCreate
 from app.schemas.user import UserCreate, UserLogin
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_refresh_token
 from app.dependencies.auth import get_current_user
 from app.routers.projects import router as projects_router
 from app.routers.permissions import router as permissions_router
@@ -27,6 +29,9 @@ from contextlib import asynccontextmanager
 import logging
 from app.core.logging_config import setup_logging
 
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 setup_logging()
 logger=logging.getLogger(__name__)
@@ -230,8 +235,14 @@ async def login(user:UserLogin):
         tenant_id=str(existing_user["tenant_id"])
     )
 
+    refresh_token= create_refresh_token(
+        user_id=str(existing_user["_id"]),
+        tenant_id=str(existing_user["tenant_id"])
+    )
+
     return {
         "access_token": access_token,
+        "refresh_token":refresh_token,
         "token_type":"bearer"
     }
 
@@ -301,4 +312,40 @@ async def test_permission(
 ):
     return {
         "message": "you have project create permission"
+    }
+
+@app.post("/refresh")
+async def refresh_access_token(data: RefreshTokenRequest):
+
+    try:
+        payload = decode_refresh_token(data.refresh_token)
+
+        user_id = ObjectId(payload["sub"])
+        tenant_id = ObjectId(payload["tenant_id"])
+
+    except (jwt.InvalidTokenError, KeyError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token"
+        )
+
+    user = await db.users.find_one({
+        "_id": user_id,
+        "tenant_id": tenant_id
+    })
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="User not found"
+        )
+
+    new_access_token = create_access_token(
+        user_id=str(user["_id"]),
+        tenant_id=str(user["tenant_id"])
+    )
+
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
     }

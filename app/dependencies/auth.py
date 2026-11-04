@@ -19,6 +19,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials=Depends(bea
 
     try:
         payload= decode_access_token(token)
+
+        payload = decode_access_token(token)
+        if payload.get("type") != "access":
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid access token"
+                )
+        
         user_id= payload.get("sub")
         tenant_id= payload.get("tenant_id")
         if not user_id or not tenant_id:
