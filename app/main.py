@@ -8,11 +8,12 @@ from pymongo.errors import DuplicateKeyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import jwt
+from datetime import datetime, timedelta, timezone
 
 from app.database import client,db
 from app.schemas.tenant import TenantCreate
 from app.schemas.user import UserCreate, UserLogin
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_refresh_token
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_refresh_token, hash_refresh_token
 from app.dependencies.auth import get_current_user
 from app.routers.projects import router as projects_router
 from app.routers.permissions import router as permissions_router
@@ -21,6 +22,7 @@ from app.schemas.user import UserRoleAssign
 from bson.errors import InvalidId
 from app.dependencies.permissions import require_permission
 from app.database import create_indexes
+from app.core.config import settings
 
 from app.dependencies.permissions import(require_permission, require_user_manage)
 
@@ -239,6 +241,21 @@ async def login(user:UserLogin):
         user_id=str(existing_user["_id"]),
         tenant_id=str(existing_user["tenant_id"])
     )
+
+    #calculate refresh token expiration
+    expires_at= datetime.now(timezone.utc)+timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+
+    #store hashed refresh token in mongoDB
+    await db.refresh_tokens.insert_one({
+        "user_id": existing_user["_id"],
+        "tenant_id":existing_user["tenant_id"],
+        "token_hash": hash_refresh_token(refresh_token),
+        "expires_at": expires_at,
+        "revoked":False,
+        "created_at": datetime.now(timezone.utc)
+    })
 
     return {
         "access_token": access_token,

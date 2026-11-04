@@ -49,3 +49,15 @@ async def create_indexes():
         unique=True,
         name="unique_email_per_tenant"
     )
+
+    await db.refresh_tokens.create_index(
+    "token_hash",
+    unique=True,
+    name="unique_refresh_token_hash"
+    )
+    
+    await db.refresh_tokens.create_index(
+    "expires_at",
+    expireAfterSeconds=0,
+    name="refresh_token_expiration"
+    )

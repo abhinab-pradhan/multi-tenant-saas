@@ -1,5 +1,6 @@
 import os
 import jwt
+import hashlib
 from datetime import datetime, timedelta, timezone
 from pwdlib import PasswordHash
 from dotenv import load_dotenv
@@ -77,3 +78,6 @@ def decode_refresh_token(token: str) -> dict:
         raise jwt.InvalidTokenError("Invalid refresh token")
 
     return payload
+
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
