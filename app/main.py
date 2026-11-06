@@ -35,6 +35,9 @@ from app.core.logging_config import setup_logging
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
+class LogoutRequest(BaseModel):
+    refresh_token:str
+
 setup_logging()
 logger=logging.getLogger(__name__)
 
@@ -346,9 +349,11 @@ async def refresh_access_token(data: RefreshTokenRequest):
             detail="Invalid or expired refresh token"
         )
 
+    token_hash= hash_refresh_token(data.refresh_token)
+
     #find the stored refresh token
     stored_token = await db.refresh_tokens.find_one({
-        "token_hash": hash_refresh_token(data.refresh_token),
+        "token_hash": token_hash,
         "user_id": user_id,
         "tenant_id": tenant_id,
         "revoked": False
@@ -372,12 +377,84 @@ async def refresh_access_token(data: RefreshTokenRequest):
             detail="User not found"
         )
 
+    #revoke the old refresh token
+    await db.refresh_tokens.update_one(
+        {
+            "_id":stored_token["_id"], 
+            "revoked": False
+        },
+        {
+            "$set": 
+            {"revoked": True,
+            "revoked_at": datetime.now(timezone.utc)
+            }
+        }
+    )
+
+    #generate new tokens
     new_access_token = create_access_token(
         user_id=str(user["_id"]),
         tenant_id=str(user["tenant_id"])
     )
 
+    new_refresh_token = create_refresh_token(
+        user_id=str(user["_id"]),
+        tenant_id=str(user["tenant_id"])
+    )
+
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+
+    await db.refresh_tokens.insert_one({
+        "user_id": user["_id"],
+        "tenant_id": user["tenant_id"],
+        "token_hash": hash_refresh_token(new_refresh_token),
+        "expires_at": expires_at,
+        "revoked": False,
+        "created_at": datetime.now(timezone.utc)
+    })
+
     return {
         "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer"
+    }
+
+
+@app.post("/logout")
+async def logout(data: LogoutRequest):
+
+    try:
+        payload = decode_refresh_token(data.refresh_token)
+
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token"
+        )
+
+    token_hash = hash_refresh_token(data.refresh_token)
+
+    result = await db.refresh_tokens.update_one(
+        {
+            "token_hash": token_hash,
+            "revoked": False
+        },
+        {
+            "$set": {
+                "revoked": True,
+                "revoked_at": datetime.now(timezone.utc)
+            }
+        }
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=401,
+            detail="Refresh token is invalid or already revoked"
+        )
+
+    return {
+        "message": "Logged out successfully"
     }
