@@ -346,6 +346,21 @@ async def refresh_access_token(data: RefreshTokenRequest):
             detail="Invalid or expired refresh token"
         )
 
+    #find the stored refresh token
+    stored_token = await db.refresh_tokens.find_one({
+        "token_hash": hash_refresh_token(data.refresh_token),
+        "user_id": user_id,
+        "tenant_id": tenant_id,
+        "revoked": False
+    })
+
+    if not stored_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Refresh token is invalid or revoked"
+        )
+
+    #verify that the user still exists
     user = await db.users.find_one({
         "_id": user_id,
         "tenant_id": tenant_id
