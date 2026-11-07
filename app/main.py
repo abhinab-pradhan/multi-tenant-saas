@@ -176,7 +176,9 @@ async def create_user(user:UserCreate, current_user:dict=Depends(require_user_ma
         "email": user.email,
         "password_hash":hash_password(user.password),
         "tenant_id":tenant_id,
-        "role_ids":[]
+        "role_ids":[],
+        "is_active": True,
+        "created_at":datetime.now(timezone.utc)
     }
 
     try:
@@ -232,6 +234,12 @@ async def login(user:UserLogin):
         raise HTTPException(
             status_code=401,
             detail="invalid email or password"
+        )
+
+    if not existing_user.get("is_active", True):
+        raise HTTPException(
+            status_code=403,
+            detail="your account has been deactivated"
         )
 
     #generate a jwt for this authenticated user
@@ -375,6 +383,12 @@ async def refresh_access_token(data: RefreshTokenRequest):
         raise HTTPException(
             status_code=401,
             detail="User not found"
+        )
+
+    if not user.get("is_active", True):
+        raise HTTPException(
+            status_code=403,
+            detail="your account has been deactivated"
         )
 
     #revoke the old refresh token
