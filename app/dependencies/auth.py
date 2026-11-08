@@ -20,7 +20,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials=Depends(bea
     try:
         payload= decode_access_token(token)
 
-        payload = decode_access_token(token)
         if payload.get("type") != "access":
             raise HTTPException(
                 status_code=401,
@@ -44,6 +43,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials=Depends(bea
             raise HTTPException(
                 status_code=401,
                 detail="user not found"
+            )
+
+        #check whether the account is active
+        if not current_user.get("is_active", True):
+            raise HTTPException(
+                status_code=403,
+                detail="your account has been deactivated"
             )
 
         return current_user

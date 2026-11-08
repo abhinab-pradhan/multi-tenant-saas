@@ -38,6 +38,9 @@ class RefreshTokenRequest(BaseModel):
 class LogoutRequest(BaseModel):
     refresh_token:str
 
+class UserStatusUpdate(BaseModel):
+    is_active: bool
+
 setup_logging()
 logger=logging.getLogger(__name__)
 
@@ -204,6 +207,61 @@ async def test():
         "hashed":hashed
     }
 '''
+
+@app.patch("/users/{user_id}/status")
+async def update_user_status(
+    user_id: str,
+    data: UserStatusUpdate,
+    current_user: dict = Depends(require_user_manage)
+):
+    tenant_id = current_user["tenant_id"]
+
+    # Validate user ID
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid user ID"
+        )
+
+    # Find user within the current tenant
+    target_user = await db.users.find_one({
+        "_id": ObjectId(user_id),
+        "tenant_id": tenant_id
+    })
+
+    if not target_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # Prevent changing your own account status
+    if target_user["_id"] == current_user["_id"]:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot change your own account status"
+        )
+
+    # Update account status
+    await db.users.update_one(
+        {
+            "_id": target_user["_id"],
+            "tenant_id": tenant_id
+        },
+        {
+            "$set": {
+                "is_active": data.is_active,
+                "updated_at": datetime.now(timezone.utc)
+            }
+        }
+    )
+
+    return {
+        "message": "User status updated successfully",
+        "user_id": str(target_user["_id"]),
+        "is_active": data.is_active
+    }
+
 
 @app.post("/login")
 async def login(user:UserLogin):
